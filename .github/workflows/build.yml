@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        vpx_tag: ["v10.8.1-3788-2151290", "main"]
+        vpx_tag: ["v10.8.1-3788-2151290", "master"]
 
     runs-on: ${{ matrix.os }}
 
@@ -20,7 +20,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DVPX_TAG=${{ matrix.vpx_tag }}
+        shell: bash
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release "-DVPX_TAG=${{ matrix.vpx_tag }}"
 
       - name: Build
         run: cmake --build build --config Release
