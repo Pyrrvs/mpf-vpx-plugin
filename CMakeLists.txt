@@ -15,13 +15,23 @@ FetchContent_Declare(vpx-sdk
 )
 FetchContent_MakeAvailable(vpx-sdk)
 
+# Detect VPX SDK header location (moved between versions)
+if(EXISTS "${vpx-sdk_SOURCE_DIR}/plugins/plugins/MsgPlugin.h")
+    set(VPX_PLUGIN_INCLUDE_DIR "${vpx-sdk_SOURCE_DIR}/plugins")
+elseif(EXISTS "${vpx-sdk_SOURCE_DIR}/src/plugins/MsgPlugin.h")
+    set(VPX_PLUGIN_INCLUDE_DIR "${vpx-sdk_SOURCE_DIR}/src")
+else()
+    message(FATAL_ERROR "Could not find VPX plugin SDK headers in fetched VPX source")
+endif()
+message(STATUS "VPX plugin SDK headers found at: ${VPX_PLUGIN_INCLUDE_DIR}")
+
 # --- Plugin shared library ---
 add_library(mpf-vpx-plugin MODULE
     src/MPFPlugin.cpp
 )
 
 target_include_directories(mpf-vpx-plugin PRIVATE
-    ${vpx-sdk_SOURCE_DIR}/src
+    ${VPX_PLUGIN_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/src
 )
 
@@ -70,7 +80,7 @@ add_executable(mpf-vpx-tests
 target_include_directories(mpf-vpx-tests PRIVATE
     ${CMAKE_SOURCE_DIR}/tests
     ${CMAKE_SOURCE_DIR}/src
-    ${vpx-sdk_SOURCE_DIR}/src
+    ${VPX_PLUGIN_INCLUDE_DIR}
 )
 
 if(WIN32)
