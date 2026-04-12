@@ -1,0 +1,221 @@
+#include "MPFController.h"
+
+#include <stdexcept>
+
+namespace MPF {
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+static bool ToBool(const std::string& s) {
+    return s == "True" || s == "true" || s == "1";
+}
+
+static int ToInt(const std::string& s, int fallback = 0) {
+    try {
+        return std::stoi(s);
+    } catch (...) {
+        return fallback;
+    }
+}
+
+std::string MPFController::ParamsToJson(const std::map<std::string, std::string>& params) {
+    if (params.empty()) return "{}";
+    std::string out = "{";
+    bool first = true;
+    for (const auto& [key, val] : params) {
+        if (!first) out += ',';
+        out += '"';
+        out += key;
+        out += "\":\"";
+        // Minimal JSON escaping for values
+        for (char c : val) {
+            switch (c) {
+                case '"':  out += "\\\""; break;
+                case '\\': out += "\\\\"; break;
+                default:   out += c;
+            }
+        }
+        out += '"';
+        first = false;
+    }
+    out += '}';
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Constructor / Destructor
+// ---------------------------------------------------------------------------
+
+MPFController::MPFController(bool recordingEnabled, const std::string& recordingPath) {
+    m_recorder.SetEnabled(recordingEnabled);
+    m_recorder.SetOutputDirectory(recordingPath);
+}
+
+MPFController::~MPFController() {
+    if (m_bcp.IsConnected()) {
+        m_recorder.StopSession();
+        m_bcp.Disconnect();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+void MPFController::Run() {
+    Run("localhost", 5051);
+}
+
+void MPFController::Run(const std::string& addr) {
+    Run(addr, 5051);
+}
+
+void MPFController::Run(const std::string& addr, int port) {
+    m_bcp.Connect(addr, port);
+    m_bcp.SendAndWait("vpcom_bridge", {{"subcommand", "start"}}, "vpcom_bridge_response");
+    m_recorder.StartSession();
+}
+
+void MPFController::Stop() {
+    m_recorder.StopSession();
+    m_bcp.Send("vpcom_bridge", {{"subcommand", "stop"}});
+    m_bcp.Disconnect();
+}
+
+// ---------------------------------------------------------------------------
+// DispatchToMPF
+// ---------------------------------------------------------------------------
+
+std::string MPFController::DispatchToMPF(const char* category,
+                                         const std::string& subcommand,
+                                         const std::map<std::string, std::string>& extraParams)
+{
+    std::map<std::string, std::string> params = extraParams;
+    params["subcommand"] = subcommand;
+
+    if (m_recorder.IsEnabled()) {
+        m_recorder.Record({m_recorder.Now(), category, "vpx_to_mpf",
+                           subcommand, ParamsToJson(extraParams), ""});
+    }
+
+    BCPResponse resp = m_bcp.SendAndWait("vpcom_bridge", params, "vpcom_bridge_response");
+
+    std::string resultVal;
+    if (!resp.command.empty()) {
+        auto it = resp.params.find("result");
+        if (it != resp.params.end()) resultVal = it->second;
+    }
+
+    if (m_recorder.IsEnabled()) {
+        m_recorder.Record({m_recorder.Now(), category, "mpf_to_vpx",
+                           subcommand, "", resultVal.empty() ? "" : resultVal});
+    }
+
+    auto errIt = resp.params.find("error");
+    if (errIt != resp.params.end()) return "";
+
+    return resultVal;
+}
+
+// ---------------------------------------------------------------------------
+// Switch access
+// ---------------------------------------------------------------------------
+
+bool MPFController::GetSwitch(int number) {
+    std::string result = DispatchToMPF("query", "switch", {{"number", std::to_string(number)}});
+    return ToBool(result);
+}
+
+bool MPFController::GetSwitch(const std::string& number) {
+    std::string result = DispatchToMPF("query", "switch", {{"number", number}});
+    return ToBool(result);
+}
+
+void MPFController::SetSwitch(int number, bool value) {
+    DispatchToMPF("input", "set_switch", {
+        {"number", std::to_string(number)},
+        {"value", value ? "bool:True" : "bool:False"}
+    });
+}
+
+void MPFController::SetSwitch(const std::string& number, bool value) {
+    DispatchToMPF("input", "set_switch", {
+        {"number", number},
+        {"value", value ? "bool:True" : "bool:False"}
+    });
+}
+
+void MPFController::PulseSW(int number) {
+    DispatchToMPF("input", "pulsesw", {{"number", std::to_string(number)}});
+}
+
+void MPFController::PulseSW(const std::string& number) {
+    DispatchToMPF("input", "pulsesw", {{"number", number}});
+}
+
+// ---------------------------------------------------------------------------
+// Mech access
+// ---------------------------------------------------------------------------
+
+int MPFController::ReadMech(int number) {
+    std::string result = DispatchToMPF("query", "mech", {{"number", std::to_string(number)}});
+    return ToInt(result, 0);
+}
+
+void MPFController::SetMech(int number, int value) {
+    DispatchToMPF("input", "set_mech", {
+        {"number", std::to_string(number)},
+        {"value", std::to_string(value)}
+    });
+}
+
+int MPFController::GetMech(int number) {
+    std::string result = DispatchToMPF("query", "get_mech", {{"number", std::to_string(number)}});
+    return ToInt(result, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Polled state
+// ---------------------------------------------------------------------------
+
+std::string MPFController::GetChangedSolenoids() {
+    return DispatchToMPF("state", "changed_solenoids");
+}
+
+std::string MPFController::GetChangedLamps() {
+    return DispatchToMPF("state", "changed_lamps");
+}
+
+std::string MPFController::GetChangedGIStrings() {
+    return DispatchToMPF("state", "changed_gi_strings");
+}
+
+std::string MPFController::GetChangedLEDs() {
+    return DispatchToMPF("state", "changed_leds");
+}
+
+std::string MPFController::GetChangedBrightnessLEDs() {
+    return DispatchToMPF("state", "changed_brightness_leds");
+}
+
+std::string MPFController::GetChangedFlashers() {
+    return DispatchToMPF("state", "changed_flashers");
+}
+
+std::string MPFController::GetHardwareRules() {
+    return DispatchToMPF("state", "get_hardwarerules");
+}
+
+bool MPFController::IsCoilActive(int number) {
+    std::string result = DispatchToMPF("state", "get_coilactive", {{"number", std::to_string(number)}});
+    return ToBool(result);
+}
+
+bool MPFController::IsCoilActive(const std::string& number) {
+    std::string result = DispatchToMPF("state", "get_coilactive", {{"number", number}});
+    return ToBool(result);
+}
+
+} // namespace MPF
