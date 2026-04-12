@@ -183,7 +183,7 @@ FetchContent_Declare(vpx-sdk
 )
 ```
 
-Only the `plugins/plugins/` headers are referenced via `target_include_directories`. The full VPX source is fetched but nothing else is compiled from it.
+Only the `plugins/plugins/` headers are referenced via `target_include_directories`. FetchContent clones the full VPX repo (shallow, but still ~100MB+). `GIT_SHALLOW TRUE` keeps it manageable. Nothing from VPX is compiled — only the 5 header files under `plugins/plugins/` are used. CI caching of the FetchContent download directory is recommended to avoid re-cloning on every build.
 
 C++ standard: C++20 (required for `std::format`, `std::chrono` improvements, and matching VPX's own standard).
 
