@@ -1,0 +1,28 @@
+# Build
+build/
+dist/
+CMakeCache.txt
+CMakeFiles/
+
+# Binaries
+*.dylib
+*.so
+*.dll
+*.exe
+*.o
+*.obj
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# FetchContent downloads
+_deps/
