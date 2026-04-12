@@ -166,12 +166,14 @@ TEST_CASE("Recorder: enabled recorder creates JSONL file") {
     }
     REQUIRE_FALSE(foundFile.empty());
 
-    // Read lines
-    std::ifstream file(foundFile);
+    // Read lines (in a scope so the ifstream closes before remove_all on Windows)
     std::vector<std::string> lines;
-    std::string line;
-    while (std::getline(file, line)) {
-        if (!line.empty()) lines.push_back(line);
+    {
+        std::ifstream file(foundFile);
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!line.empty()) lines.push_back(line);
+        }
     }
 
     CHECK(lines.size() == 2);
