@@ -2,6 +2,7 @@
 
 #include "BCPClient.h"
 #include "Recorder.h"
+#include "plugins/ScriptablePlugin.h"
 
 #include <string>
 #include <map>
@@ -9,6 +10,8 @@
 namespace MPF {
 
 class MPFController {
+    PSC_IMPLEMENT_REFCOUNT()
+
 public:
     MPFController(bool recordingEnabled, const std::string& recordingPath);
     ~MPFController();
