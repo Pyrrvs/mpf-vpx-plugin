@@ -29,6 +29,7 @@ message(STATUS "VPX plugin SDK headers found at: ${VPX_PLUGIN_INCLUDE_DIR}")
 add_library(mpf-vpx-plugin MODULE
     src/MPFPlugin.cpp
     src/BCPClient.cpp
+    src/Recorder.cpp
 )
 
 target_include_directories(mpf-vpx-plugin PRIVATE
@@ -77,7 +78,9 @@ enable_testing()
 add_executable(mpf-vpx-tests
     tests/test_main.cpp
     tests/test_BCPClient.cpp
+    tests/test_Recorder.cpp
     src/BCPClient.cpp
+    src/Recorder.cpp
 )
 
 target_include_directories(mpf-vpx-tests PRIVATE
