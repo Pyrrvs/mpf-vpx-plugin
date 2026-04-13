@@ -1,4 +1,5 @@
 #include "MPFController.h"
+#include "ChangedItems.h"
 
 #include "plugins/MsgPlugin.h"
 #include "plugins/ScriptablePlugin.h"
@@ -11,8 +12,31 @@ using std::string;
 
 namespace MPF {
 
-// Alias so PSC_CLASS_START(MPF_Controller) generates casts to MPFController
+// Aliases so PSC_CLASS_START macros generate casts to the real types
 using MPF_Controller = MPFController;
+using MPF_ChangedItems = ChangedItems;
+using MPF_HardwareRuleItems = HardwareRuleItems;
+
+// PSC_VAR_SET / PSC_VAR accessors for object return types used in PSC_PROP_R
+#define PSC_VAR_SET_MPF_ChangedItems(variant, value) (variant).vObject = static_cast<void*>(value)
+#define PSC_VAR_SET_MPF_HardwareRuleItems(variant, value) (variant).vObject = static_cast<void*>(value)
+#define PSC_VAR_MPF_ChangedItems(variant) static_cast<MPF_ChangedItems*>((variant).vObject)
+#define PSC_VAR_MPF_HardwareRuleItems(variant) static_cast<MPF_HardwareRuleItems*>((variant).vObject)
+
+// Scriptable class definitions for return types (must come before MPF_Controller)
+PSC_CLASS_START(MPF_ChangedItems)
+    PSC_PROP_R(MPF_ChangedItems, int, Count)
+    PSC_PROP_R_ARRAY1(MPF_ChangedItems, string, Id, int)
+    PSC_PROP_R_ARRAY1(MPF_ChangedItems, bool, State, int)
+    PSC_PROP_R_ARRAY1(MPF_ChangedItems, float, Brightness, int)
+PSC_CLASS_END(MPF_ChangedItems)
+
+PSC_CLASS_START(MPF_HardwareRuleItems)
+    PSC_PROP_R(MPF_HardwareRuleItems, int, Count)
+    PSC_PROP_R_ARRAY1(MPF_HardwareRuleItems, string, Switch, int)
+    PSC_PROP_R_ARRAY1(MPF_HardwareRuleItems, string, Coil, int)
+    PSC_PROP_R_ARRAY1(MPF_HardwareRuleItems, bool, Hold, int)
+PSC_CLASS_END(MPF_HardwareRuleItems)
 
 // Scriptable class definition
 PSC_CLASS_START(MPF_Controller)
@@ -45,13 +69,13 @@ PSC_CLASS_START(MPF_Controller)
         } });
 
     // Polled state
-    PSC_PROP_R(MPF_Controller, string, ChangedSolenoids)
-    PSC_PROP_R(MPF_Controller, string, ChangedLamps)
-    PSC_PROP_R(MPF_Controller, string, ChangedGIStrings)
-    PSC_PROP_R(MPF_Controller, string, ChangedLEDs)
-    PSC_PROP_R(MPF_Controller, string, ChangedBrightnessLEDs)
-    PSC_PROP_R(MPF_Controller, string, ChangedFlashers)
-    PSC_PROP_R(MPF_Controller, string, HardwareRules)
+    PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedSolenoids)
+    PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedLamps)
+    PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedGIStrings)
+    PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedLEDs)
+    PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedBrightnessLEDs)
+    PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedFlashers)
+    PSC_PROP_R(MPF_Controller, MPF_HardwareRuleItems, HardwareRules)
     PSC_FUNCTION1(MPF_Controller, bool, IsCoilActive, int)
     PSC_FUNCTION1(MPF_Controller, bool, IsCoilActive, string)
 
@@ -103,6 +127,8 @@ MSGPI_EXPORT void MSGPIAPI MPFPluginLoad(const uint32_t sessionId, const MsgPlug
     msgApi->BroadcastMsg(sessionId, getScriptApiMsgId, &scriptApi);
 
     auto regLambda = [](ScriptClassDef* scd) { scriptApi->RegisterScriptClass(scd); };
+    RegisterMPF_ChangedItemsSCD(regLambda);
+    RegisterMPF_HardwareRuleItemsSCD(regLambda);
     RegisterMPF_ControllerSCD(regLambda);
 
     MPF_Controller_SCD->CreateObject = []() -> void*
@@ -126,6 +152,8 @@ MSGPI_EXPORT void MSGPIAPI MPFPluginUnload()
 
     auto unregLambda = [](ScriptClassDef* scd) { scriptApi->RegisterScriptClass(scd); };
     UnregisterMPF_ControllerSCD(unregLambda);
+    UnregisterMPF_HardwareRuleItemsSCD(unregLambda);
+    UnregisterMPF_ChangedItemsSCD(unregLambda);
 
     msgApi->ReleaseMsgID(getScriptApiMsgId);
 
