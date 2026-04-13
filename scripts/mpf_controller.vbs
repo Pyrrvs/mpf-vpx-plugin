@@ -9,113 +9,113 @@
 
 Function MPF_ChangedLamps(Controller)
     Dim r : Set r = Controller.ChangedLamps
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_ChangedLamps = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 1)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 1)
     For i = 0 To n - 1
-        arr(i, 0) = r.Id(i)
-        arr(i, 1) = r.State(i)
+        mpfA(i, 0) = r.Id(i)
+        mpfA(i, 1) = r.State(i)
     Next
-    MPF_ChangedLamps = arr
+    MPF_ChangedLamps = mpfA
 End Function
 
 Function MPF_ChangedSolenoids(Controller)
     Dim r : Set r = Controller.ChangedSolenoids
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_ChangedSolenoids = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 1)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 1)
     For i = 0 To n - 1
-        arr(i, 0) = r.Id(i)
-        arr(i, 1) = r.State(i)
+        mpfA(i, 0) = r.Id(i)
+        mpfA(i, 1) = r.State(i)
     Next
-    MPF_ChangedSolenoids = arr
+    MPF_ChangedSolenoids = mpfA
 End Function
 
 Function MPF_ChangedGIStrings(Controller)
     Dim r : Set r = Controller.ChangedGIStrings
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_ChangedGIStrings = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 1)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 1)
     For i = 0 To n - 1
-        arr(i, 0) = r.Id(i)
-        arr(i, 1) = r.State(i)
+        mpfA(i, 0) = r.Id(i)
+        mpfA(i, 1) = r.State(i)
     Next
-    MPF_ChangedGIStrings = arr
+    MPF_ChangedGIStrings = mpfA
 End Function
 
 Function MPF_ChangedLEDs(Controller)
     Dim r : Set r = Controller.ChangedLEDs
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_ChangedLEDs = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 1)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 1)
     For i = 0 To n - 1
-        arr(i, 0) = r.Id(i)
-        arr(i, 1) = r.State(i)
+        mpfA(i, 0) = r.Id(i)
+        mpfA(i, 1) = r.State(i)
     Next
-    MPF_ChangedLEDs = arr
+    MPF_ChangedLEDs = mpfA
 End Function
 
 Function MPF_ChangedBrightnessLEDs(Controller)
     Dim r : Set r = Controller.ChangedBrightnessLEDs
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_ChangedBrightnessLEDs = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 1)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 1)
     For i = 0 To n - 1
-        arr(i, 0) = r.Id(i)
-        arr(i, 1) = r.Brightness(i)
+        mpfA(i, 0) = r.Id(i)
+        mpfA(i, 1) = r.Brightness(i)
     Next
-    MPF_ChangedBrightnessLEDs = arr
+    MPF_ChangedBrightnessLEDs = mpfA
 End Function
 
 Function MPF_ChangedFlashers(Controller)
     Dim r : Set r = Controller.ChangedFlashers
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_ChangedFlashers = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 1)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 1)
     For i = 0 To n - 1
-        arr(i, 0) = r.Id(i)
-        arr(i, 1) = r.State(i)
+        mpfA(i, 0) = r.Id(i)
+        mpfA(i, 1) = r.State(i)
     Next
-    MPF_ChangedFlashers = arr
+    MPF_ChangedFlashers = mpfA
 End Function
 
 Function MPF_HardwareRules(Controller)
     Dim r : Set r = Controller.HardwareRules
-    Dim n : n = r.Count
+    Dim n : n = CLng(r.Count)
     If n = 0 Then
         MPF_HardwareRules = Empty
         Exit Function
     End If
-    Dim arr() : ReDim arr(n - 1, 2)
-    Dim i
+    Dim mpfA, i
+    ReDim mpfA(n - 1, 2)
     For i = 0 To n - 1
-        arr(i, 0) = r.Switch(i)
-        arr(i, 1) = r.Coil(i)
-        arr(i, 2) = r.Hold(i)
+        mpfA(i, 0) = r.Switch(i)
+        mpfA(i, 1) = r.Coil(i)
+        mpfA(i, 2) = r.Hold(i)
     Next
-    MPF_HardwareRules = arr
+    MPF_HardwareRules = mpfA
 End Function
