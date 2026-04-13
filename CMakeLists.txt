@@ -31,6 +31,7 @@ add_library(mpf-vpx-plugin MODULE
     src/BCPClient.cpp
     src/Recorder.cpp
     src/MPFController.cpp
+    src/ChangedItems.cpp
 )
 
 target_include_directories(mpf-vpx-plugin PRIVATE
@@ -81,9 +82,11 @@ add_executable(mpf-vpx-tests
     tests/test_BCPClient.cpp
     tests/test_Recorder.cpp
     tests/test_MPFController.cpp
+    tests/test_ChangedItems.cpp
     src/BCPClient.cpp
     src/Recorder.cpp
     src/MPFController.cpp
+    src/ChangedItems.cpp
 )
 
 target_include_directories(mpf-vpx-tests PRIVATE
