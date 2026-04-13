@@ -151,9 +151,14 @@ BCPClient::~BCPClient() {
 // ---------------------------------------------------------------------------
 
 bool BCPClient::Connect(const std::string& host, int port) {
+    fprintf(stderr, "[MPF] BCPClient::Connect(%s, %d)\n", host.c_str(), port);
     if (m_connected) Disconnect();
-    if (!SocketConnect(host, port)) return false;
+    if (!SocketConnect(host, port)) {
+        fprintf(stderr, "[MPF] BCPClient::Connect FAILED - socket connect failed\n");
+        return false;
+    }
     m_connected = true;
+    fprintf(stderr, "[MPF] BCPClient::Connect SUCCESS\n");
     return true;
 }
 
@@ -187,7 +192,9 @@ BCPResponse BCPClient::SendAndWait(const std::string& command,
     if (!m_connected) return empty;
 
     std::string line = EncodeCommand(command, params);
+    fprintf(stderr, "[MPF] SendAndWait: sending '%s', waiting for '%s'\n", line.c_str(), waitForCommand.c_str());
     if (!SocketSendLine(line)) {
+        fprintf(stderr, "[MPF] SendAndWait: SocketSendLine FAILED\n");
         Disconnect();
         return empty;
     }
@@ -195,13 +202,17 @@ BCPResponse BCPClient::SendAndWait(const std::string& command,
     // Loop reading lines until we find the one we're waiting for
     std::string incoming;
     while (SocketReadLine(incoming)) {
+        fprintf(stderr, "[MPF] SendAndWait: received '%s'\n", incoming.c_str());
         BCPResponse resp = DecodeLine(incoming);
         if (resp.command == waitForCommand) {
+            fprintf(stderr, "[MPF] SendAndWait: matched response\n");
             return resp;
         }
+        fprintf(stderr, "[MPF] SendAndWait: skipping non-matching line\n");
     }
 
     // Timeout or error
+    fprintf(stderr, "[MPF] SendAndWait: TIMEOUT or socket error\n");
     Disconnect();
     return empty;
 }

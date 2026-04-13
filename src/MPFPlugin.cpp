@@ -46,11 +46,9 @@ PSC_CLASS_START(MPF_Controller)
     PSC_FUNCTION2(MPF_Controller, void, Run, string, int)
     PSC_FUNCTION0(MPF_Controller, void, Stop)
 
-    // Switch access (int-indexed)
-    PSC_PROP_RW_ARRAY1(MPF_Controller, bool, Switch, int)
-    PSC_FUNCTION1(MPF_Controller, void, PulseSW, int)
-
-    // Switch access (string-indexed)
+    // Switch access — string-only registration. VBScript coerces int args to string
+    // automatically. We can't register both int and string overloads because VPX's
+    // DISPATCH_PROPERTYGET path doesn't disambiguate on arg types (always picks first match).
     PSC_PROP_RW_ARRAY1(MPF_Controller, bool, Switch, string)
     PSC_FUNCTION1(MPF_Controller, void, PulseSW, string)
 
@@ -76,7 +74,6 @@ PSC_CLASS_START(MPF_Controller)
     PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedBrightnessLEDs)
     PSC_PROP_R(MPF_Controller, MPF_ChangedItems, ChangedFlashers)
     PSC_PROP_R(MPF_Controller, MPF_HardwareRuleItems, HardwareRules)
-    PSC_FUNCTION1(MPF_Controller, bool, IsCoilActive, int)
     PSC_FUNCTION1(MPF_Controller, bool, IsCoilActive, string)
 
     // Stub properties
