@@ -5,6 +5,8 @@
 #include <cstring>
 #include <chrono>
 
+#include "json.hpp"
+
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
     #include <winsock2.h>
@@ -102,6 +104,23 @@ BCPResponse BCPClient::DecodeLine(const std::string& line) {
             resp.params[key] = UrlDecode(val);
         }
     }
+
+    // If there's a "json" key, parse the JSON and flatten inner keys
+    auto jsonIt = resp.params.find("json");
+    if (jsonIt != resp.params.end()) {
+        try {
+            auto j = nlohmann::json::parse(jsonIt->second);
+            if (j.is_object()) {
+                for (auto& [key, value] : j.items()) {
+                    resp.params[key] = value.dump();
+                }
+            }
+        } catch (...) {
+            // If JSON parsing fails, leave the raw "json" key as-is
+        }
+        resp.params.erase("json");
+    }
+
     return resp;
 }
 

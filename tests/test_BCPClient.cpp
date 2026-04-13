@@ -206,3 +206,28 @@ TEST_CASE("Send: fire and forget does not block") {
     client.Disconnect();
     server.Stop();
 }
+
+TEST_CASE("DecodeLine: json= wrapper extracts inner keys") {
+    std::string line = "vpcom_bridge_response?json=%7B%22result%22%3A%20%5B%5B%22l-1%22%2C%20true%5D%5D%7D";
+    BCPResponse resp = BCPClient::DecodeLine(line);
+    CHECK(resp.command == "vpcom_bridge_response");
+    CHECK(resp.params.count("result") == 1);
+    CHECK(resp.params["result"].find("l-1") != std::string::npos);
+    CHECK(resp.params["result"].find("true") != std::string::npos);
+}
+
+TEST_CASE("DecodeLine: json= wrapper with multiple keys") {
+    std::string line = "cmd?json=%7B%22result%22%3A%22ok%22%2C%22extra%22%3A42%7D";
+    BCPResponse resp = BCPClient::DecodeLine(line);
+    CHECK(resp.command == "cmd");
+    CHECK(resp.params["result"] == "\"ok\"");
+    CHECK(resp.params["extra"] == "42");
+}
+
+TEST_CASE("DecodeLine: non-json response still works") {
+    std::string line = "vpcom_bridge_response?result=True&subcommand=switch";
+    BCPResponse resp = BCPClient::DecodeLine(line);
+    CHECK(resp.command == "vpcom_bridge_response");
+    CHECK(resp.params["result"] == "True");
+    CHECK(resp.params["subcommand"] == "switch");
+}
