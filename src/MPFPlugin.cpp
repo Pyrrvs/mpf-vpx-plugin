@@ -1,5 +1,6 @@
 #include "MPFController.h"
 #include "ChangedItems.h"
+#include "Log.h"
 
 #include "plugins/MsgPlugin.h"
 #include "plugins/ScriptablePlugin.h"
@@ -119,6 +120,9 @@ using namespace MPF;
 MSGPI_EXPORT void MSGPIAPI MPFPluginLoad(const uint32_t sessionId, const MsgPluginAPI* api)
 {
     msgApi = api;
+
+    LPISetup(sessionId, const_cast<MsgPluginAPI*>(api));
+    MPF_LOGI("MPF plugin loading");
 
     getScriptApiMsgId = msgApi->GetMsgID(SCRIPTPI_NAMESPACE, SCRIPTPI_MSG_GET_API);
     msgApi->BroadcastMsg(sessionId, getScriptApiMsgId, &scriptApi);

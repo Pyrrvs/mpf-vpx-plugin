@@ -32,6 +32,7 @@ add_library(mpf-vpx-plugin MODULE
     src/Recorder.cpp
     src/MPFController.cpp
     src/ChangedItems.cpp
+    src/Log.cpp
 )
 
 target_include_directories(mpf-vpx-plugin PRIVATE
@@ -87,6 +88,7 @@ add_executable(mpf-vpx-tests
     src/Recorder.cpp
     src/MPFController.cpp
     src/ChangedItems.cpp
+    src/Log.cpp
 )
 
 target_include_directories(mpf-vpx-tests PRIVATE

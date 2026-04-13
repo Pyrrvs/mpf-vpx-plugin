@@ -1,4 +1,5 @@
 #include "ChangedItems.h"
+#include "Log.h"
 #include "json.hpp"
 
 namespace MPF {
@@ -27,6 +28,30 @@ static bool JsonToBool(const nlohmann::json& val) {
 ChangedItems::ChangedItems(std::vector<std::pair<std::string, bool>> items)
     : m_items(std::move(items))
 {
+}
+
+uint32_t ChangedItems::AddRef() const {
+    return ++m_refCount;
+}
+
+uint32_t ChangedItems::Release() const {
+    uint32_t rc = --m_refCount;
+    if (rc == 0) {
+        delete this;
+    }
+    return rc;
+}
+
+uint32_t HardwareRuleItems::AddRef() const {
+    return ++m_refCount;
+}
+
+uint32_t HardwareRuleItems::Release() const {
+    uint32_t rc = --m_refCount;
+    if (rc == 0) {
+        delete this;
+    }
+    return rc;
 }
 
 ChangedItems::ChangedItems(std::vector<std::pair<std::string, bool>> items,
@@ -90,12 +115,16 @@ bool HardwareRuleItems::GetHold(int index) const {
 std::vector<std::pair<std::string, bool>> ParseChangedList(const std::string& jsonStr) {
     std::vector<std::pair<std::string, bool>> result;
 
-    if (jsonStr.empty() || jsonStr == "false" || jsonStr == "\"false\"" || jsonStr == "[]")
+    if (jsonStr.empty() || jsonStr == "false" || jsonStr == "\"false\"" || jsonStr == "[]") {
         return result;
+    }
 
     try {
         auto j = nlohmann::json::parse(jsonStr);
-        if (!j.is_array()) return result;
+        if (!j.is_array()) {
+            MPF_LOGW("ParseChangedList: payload is not an array: '%s'", jsonStr.c_str());
+            return result;
+        }
 
         for (const auto& item : j) {
             if (!item.is_array() || item.size() < 2) continue;
@@ -103,7 +132,11 @@ std::vector<std::pair<std::string, bool>> ParseChangedList(const std::string& js
             bool state = JsonToBool(item[1]);
             result.emplace_back(std::move(id), state);
         }
+    } catch (const std::exception& e) {
+        MPF_LOGE("ParseChangedList: exception '%s' parsing '%s'", e.what(), jsonStr.c_str());
+        return {};
     } catch (...) {
+        MPF_LOGE("ParseChangedList: unknown exception parsing '%s'", jsonStr.c_str());
         return {};
     }
 

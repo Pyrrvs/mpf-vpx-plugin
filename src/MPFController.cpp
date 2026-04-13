@@ -1,6 +1,6 @@
 #include "MPFController.h"
+#include "Log.h"
 
-#include <cstdio>
 #include <stdexcept>
 
 namespace MPF {
@@ -74,20 +74,19 @@ void MPFController::Run(const std::string& addr) {
 }
 
 void MPFController::Run(const std::string& addr, int port) {
-    fprintf(stderr, "[MPF] MPFController::Run(%s, %d)\n", addr.c_str(), port);
+    MPF_LOGI("MPFController::Run(%s, %d)", addr.c_str(), port);
     if (!m_bcp.Connect(addr, port)) {
-        fprintf(stderr, "[MPF] MPFController::Run - Connect failed, aborting\n");
+        MPF_LOGE("MPFController::Run - BCP connect failed, aborting");
         return;
     }
-    fprintf(stderr, "[MPF] MPFController::Run - Connected, sending start handshake\n");
+    MPF_LOGD("MPFController::Run - connected, sending start handshake");
     BCPResponse resp = m_bcp.SendAndWait("vpcom_bridge", {{"subcommand", "start"}}, "vpcom_bridge_response");
     if (resp.command.empty()) {
-        fprintf(stderr, "[MPF] MPFController::Run - Handshake failed (empty response)\n");
+        MPF_LOGE("MPFController::Run - handshake failed (empty response)");
     } else {
-        fprintf(stderr, "[MPF] MPFController::Run - Handshake OK\n");
+        MPF_LOGI("MPFController::Run - handshake OK");
     }
     m_recorder.StartSession();
-    fprintf(stderr, "[MPF] MPFController::Run - Complete\n");
 }
 
 void MPFController::Stop() {

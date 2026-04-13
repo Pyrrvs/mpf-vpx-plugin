@@ -1,4 +1,5 @@
 #include "BCPClient.h"
+#include "Log.h"
 
 #include <sstream>
 #include <iomanip>
@@ -151,14 +152,14 @@ BCPClient::~BCPClient() {
 // ---------------------------------------------------------------------------
 
 bool BCPClient::Connect(const std::string& host, int port) {
-    fprintf(stderr, "[MPF] BCPClient::Connect(%s, %d)\n", host.c_str(), port);
+    MPF_LOGI("BCPClient::Connect(%s, %d)", host.c_str(), port);
     if (m_connected) Disconnect();
     if (!SocketConnect(host, port)) {
-        fprintf(stderr, "[MPF] BCPClient::Connect FAILED - socket connect failed\n");
+        MPF_LOGE("BCPClient::Connect - socket connect failed");
         return false;
     }
     m_connected = true;
-    fprintf(stderr, "[MPF] BCPClient::Connect SUCCESS\n");
+    MPF_LOGI("BCPClient::Connect - connected");
     return true;
 }
 
@@ -192,27 +193,24 @@ BCPResponse BCPClient::SendAndWait(const std::string& command,
     if (!m_connected) return empty;
 
     std::string line = EncodeCommand(command, params);
-    fprintf(stderr, "[MPF] SendAndWait: sending '%s', waiting for '%s'\n", line.c_str(), waitForCommand.c_str());
+    MPF_LOGD("SendAndWait: sending '%s', waiting for '%s'", line.c_str(), waitForCommand.c_str());
     if (!SocketSendLine(line)) {
-        fprintf(stderr, "[MPF] SendAndWait: SocketSendLine FAILED\n");
+        MPF_LOGE("SendAndWait: socket send failed");
         Disconnect();
         return empty;
     }
 
-    // Loop reading lines until we find the one we're waiting for
     std::string incoming;
     while (SocketReadLine(incoming)) {
-        fprintf(stderr, "[MPF] SendAndWait: received '%s'\n", incoming.c_str());
+        MPF_LOGD("SendAndWait: received '%s'", incoming.c_str());
         BCPResponse resp = DecodeLine(incoming);
         if (resp.command == waitForCommand) {
-            fprintf(stderr, "[MPF] SendAndWait: matched response\n");
             return resp;
         }
-        fprintf(stderr, "[MPF] SendAndWait: skipping non-matching line\n");
+        MPF_LOGD("SendAndWait: skipping non-matching line");
     }
 
-    // Timeout or error
-    fprintf(stderr, "[MPF] SendAndWait: TIMEOUT or socket error\n");
+    MPF_LOGE("SendAndWait: timeout or socket error waiting for '%s'", waitForCommand.c_str());
     Disconnect();
     return empty;
 }

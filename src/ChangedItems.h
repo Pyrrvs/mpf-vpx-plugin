@@ -13,8 +13,8 @@ public:
     ChangedItems(std::vector<std::pair<std::string, bool>> items,
                  std::vector<float> brightness);
 
-    uint32_t AddRef() const { m_refCount++; return m_refCount; }
-    uint32_t Release() const { m_refCount--; uint32_t rc = m_refCount; if (rc == 0) delete this; return rc; }
+    uint32_t AddRef() const;
+    uint32_t Release() const;
 
     int GetCount() const;
     std::string GetId(int index) const;
@@ -31,8 +31,8 @@ class HardwareRuleItems {
 public:
     HardwareRuleItems(std::vector<std::tuple<std::string, std::string, bool>> rules);
 
-    uint32_t AddRef() const { m_refCount++; return m_refCount; }
-    uint32_t Release() const { m_refCount--; uint32_t rc = m_refCount; if (rc == 0) delete this; return rc; }
+    uint32_t AddRef() const;
+    uint32_t Release() const;
 
     int GetCount() const;
     std::string GetSwitch(int index) const;
