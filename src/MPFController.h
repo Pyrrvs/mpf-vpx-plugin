@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BCPClient.h"
+#include "ChangedItems.h"
 #include "Recorder.h"
 #include "plugins/ScriptablePlugin.h"
 
@@ -39,13 +40,13 @@ public:
     int GetMech(int number);
 
     // --- Polled state ---
-    std::string GetChangedSolenoids();
-    std::string GetChangedLamps();
-    std::string GetChangedGIStrings();
-    std::string GetChangedLEDs();
-    std::string GetChangedBrightnessLEDs();
-    std::string GetChangedFlashers();
-    std::string GetHardwareRules();
+    ChangedItems* GetChangedSolenoids();
+    ChangedItems* GetChangedLamps();
+    ChangedItems* GetChangedGIStrings();
+    ChangedItems* GetChangedLEDs();
+    ChangedItems* GetChangedBrightnessLEDs();
+    ChangedItems* GetChangedFlashers();
+    HardwareRuleItems* GetHardwareRules();
     bool IsCoilActive(int number);
     bool IsCoilActive(const std::string& number);
 

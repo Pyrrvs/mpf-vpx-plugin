@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "MPFController.h"
+#include "ChangedItems.h"
 #include "MockBCPServer.h"
 
 #include <thread>
@@ -35,11 +36,20 @@ static MockHandler MakeMPFHandler() {
         if (sub == "set_mech")
             return "vpcom_bridge_response?result=ok";
         if (sub == "changed_solenoids")
-            return "vpcom_bridge_response?result=%5B%5B%220%22%2Ctrue%5D%5D";
-        if (sub == "changed_lamps" || sub == "changed_gi_strings" ||
-            sub == "changed_leds" || sub == "changed_brightness_leds" ||
-            sub == "changed_flashers" || sub == "get_hardwarerules")
-            return "vpcom_bridge_response?result=false";
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["coil1", true], ["coil2", false]]})");
+        if (sub == "changed_lamps")
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["l-1", true], ["l-2", false]]})");
+        if (sub == "changed_gi_strings")
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["gi1", true]]})");
+        if (sub == "changed_leds")
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["led1", true]]})");
+        if (sub == "changed_brightness_leds")
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["led1", 0.8], ["led2", 0.2]]})");
+        if (sub == "changed_flashers")
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["f1", true]]})");
+        if (sub == "get_hardwarerules")
+            return "vpcom_bridge_response?json=" + BCPClient::UrlEncode(R"({"result": [["sw1", "coil1", true]]})");
+
         if (sub == "get_coilactive")
             return "vpcom_bridge_response?result=True";
 
@@ -114,18 +124,78 @@ TEST_CASE("MPFController: Mech access") {
     server.Stop();
 }
 
-TEST_CASE("MPFController: ChangedSolenoids returns result string") {
+TEST_CASE("MPFController: ChangedSolenoids returns ChangedItems") {
     MockBCPServer server;
     int port = server.Start(MakeMPFHandler());
     REQUIRE(port > 0);
-
     MPFController ctrl(false, "");
     ctrl.Run("127.0.0.1", port);
 
-    std::string result = ctrl.GetChangedSolenoids();
-    CHECK_FALSE(result.empty());
-    // The mock returns URL-decoded: [["0",true]]
-    CHECK(result.find("[") != std::string::npos);
+    ChangedItems* result = ctrl.GetChangedSolenoids();
+    REQUIRE(result != nullptr);
+    CHECK(result->GetCount() == 2);
+    CHECK(result->GetId(0) == "coil1");
+    CHECK(result->GetState(0) == true);
+    CHECK(result->GetId(1) == "coil2");
+    CHECK(result->GetState(1) == false);
+    result->Release();
+
+    ctrl.Stop();
+    server.Stop();
+}
+
+TEST_CASE("MPFController: ChangedLamps returns ChangedItems with string IDs") {
+    MockBCPServer server;
+    int port = server.Start(MakeMPFHandler());
+    REQUIRE(port > 0);
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    ChangedItems* result = ctrl.GetChangedLamps();
+    REQUIRE(result != nullptr);
+    CHECK(result->GetCount() == 2);
+    CHECK(result->GetId(0) == "l-1");
+    CHECK(result->GetState(0) == true);
+    result->Release();
+
+    ctrl.Stop();
+    server.Stop();
+}
+
+TEST_CASE("MPFController: ChangedBrightnessLEDs has brightness values") {
+    MockBCPServer server;
+    int port = server.Start(MakeMPFHandler());
+    REQUIRE(port > 0);
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    ChangedItems* result = ctrl.GetChangedBrightnessLEDs();
+    REQUIRE(result != nullptr);
+    CHECK(result->GetCount() == 2);
+    CHECK(result->GetBrightness(0) == doctest::Approx(0.8f));
+    CHECK(result->GetState(0) == true);
+    CHECK(result->GetBrightness(1) == doctest::Approx(0.2f));
+    CHECK(result->GetState(1) == false);
+    result->Release();
+
+    ctrl.Stop();
+    server.Stop();
+}
+
+TEST_CASE("MPFController: HardwareRules returns HardwareRuleItems") {
+    MockBCPServer server;
+    int port = server.Start(MakeMPFHandler());
+    REQUIRE(port > 0);
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    HardwareRuleItems* result = ctrl.GetHardwareRules();
+    REQUIRE(result != nullptr);
+    CHECK(result->GetCount() == 1);
+    CHECK(result->GetSwitch(0) == "sw1");
+    CHECK(result->GetCoil(0) == "coil1");
+    CHECK(result->GetHold(0) == true);
+    result->Release();
 
     ctrl.Stop();
     server.Stop();

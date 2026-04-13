@@ -180,32 +180,55 @@ int MPFController::GetMech(int number) {
 // Polled state
 // ---------------------------------------------------------------------------
 
-std::string MPFController::GetChangedSolenoids() {
-    return DispatchToMPF("state", "changed_solenoids");
+ChangedItems* MPFController::GetChangedSolenoids() {
+    std::string raw = DispatchToMPF("state", "changed_solenoids");
+    auto items = ParseChangedList(raw);
+    return items.empty() ? nullptr : new ChangedItems(std::move(items));
 }
 
-std::string MPFController::GetChangedLamps() {
-    return DispatchToMPF("state", "changed_lamps");
+ChangedItems* MPFController::GetChangedLamps() {
+    std::string raw = DispatchToMPF("state", "changed_lamps");
+    auto items = ParseChangedList(raw);
+    return items.empty() ? nullptr : new ChangedItems(std::move(items));
 }
 
-std::string MPFController::GetChangedGIStrings() {
-    return DispatchToMPF("state", "changed_gi_strings");
+ChangedItems* MPFController::GetChangedGIStrings() {
+    std::string raw = DispatchToMPF("state", "changed_gi_strings");
+    auto items = ParseChangedList(raw);
+    return items.empty() ? nullptr : new ChangedItems(std::move(items));
 }
 
-std::string MPFController::GetChangedLEDs() {
-    return DispatchToMPF("state", "changed_leds");
+ChangedItems* MPFController::GetChangedLEDs() {
+    std::string raw = DispatchToMPF("state", "changed_leds");
+    auto items = ParseChangedList(raw);
+    return items.empty() ? nullptr : new ChangedItems(std::move(items));
 }
 
-std::string MPFController::GetChangedBrightnessLEDs() {
-    return DispatchToMPF("state", "changed_brightness_leds");
+ChangedItems* MPFController::GetChangedBrightnessLEDs() {
+    std::string raw = DispatchToMPF("state", "changed_brightness_leds");
+    auto parsed = ParseChangedBrightnessList(raw);
+    if (parsed.empty()) return nullptr;
+    std::vector<std::pair<std::string, bool>> items;
+    std::vector<float> brightness;
+    items.reserve(parsed.size());
+    brightness.reserve(parsed.size());
+    for (auto& [id, state, bright] : parsed) {
+        items.emplace_back(std::move(id), state);
+        brightness.push_back(bright);
+    }
+    return new ChangedItems(std::move(items), std::move(brightness));
 }
 
-std::string MPFController::GetChangedFlashers() {
-    return DispatchToMPF("state", "changed_flashers");
+ChangedItems* MPFController::GetChangedFlashers() {
+    std::string raw = DispatchToMPF("state", "changed_flashers");
+    auto items = ParseChangedList(raw);
+    return items.empty() ? nullptr : new ChangedItems(std::move(items));
 }
 
-std::string MPFController::GetHardwareRules() {
-    return DispatchToMPF("state", "get_hardwarerules");
+HardwareRuleItems* MPFController::GetHardwareRules() {
+    std::string raw = DispatchToMPF("state", "get_hardwarerules");
+    auto rules = ParseHardwareRulesList(raw);
+    return rules.empty() ? nullptr : new HardwareRuleItems(std::move(rules));
 }
 
 bool MPFController::IsCoilActive(int number) {
