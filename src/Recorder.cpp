@@ -182,7 +182,12 @@ std::string Recorder::FormatEvent(const RecordEvent& event,
 
     if (!event.result.empty()) {
         out += ",\"result\":";
-        out += event.result;
+        char ch = event.result.front();
+        if (ch == '[' || ch == '{' || ch == '"') {
+            out += event.result;   // already valid JSON
+        } else {
+            JsonEscapeAppend(out, event.result);  // wrap scalar as JSON string
+        }
     }
 
     out += '}';
