@@ -29,6 +29,17 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build --output-on-failure -C Release
 
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p build/dist/mpf
+          cp plugin.cfg build/dist/mpf/
+          cp scripts/mpf_controller.vbs build/dist/mpf/
+          if [ ! -f build/dist/mpf/plugin-mpf* ]; then
+            find build -maxdepth 2 \( -name "plugin-mpf*.dll" -o -name "plugin-mpf*.dylib" -o -name "plugin-mpf*.so" \) \
+              ! -path "build/dist/*" -exec cp {} build/dist/mpf/ \;
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
