@@ -9,13 +9,22 @@ namespace MPF {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// BCP encodes typed values with a prefix: "bool:True", "int:42", "float:1.5".
+// Strip the prefix so helpers can parse the raw value.
+static std::string StripBcpTypePrefix(const std::string& s) {
+    auto pos = s.find(':');
+    if (pos != std::string::npos) return s.substr(pos + 1);
+    return s;
+}
+
 static bool ToBool(const std::string& s) {
-    return s == "True" || s == "true" || s == "1";
+    std::string v = StripBcpTypePrefix(s);
+    return v == "True" || v == "true" || v == "1";
 }
 
 static int ToInt(const std::string& s, int fallback = 0) {
     try {
-        return std::stoi(s);
+        return std::stoi(StripBcpTypePrefix(s));
     } catch (...) {
         return fallback;
     }
