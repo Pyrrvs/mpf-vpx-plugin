@@ -108,6 +108,12 @@ void MPFController::Stop() {
 // DispatchToMPF
 // ---------------------------------------------------------------------------
 
+// Returns true if the result carries meaningful data worth recording.
+// Empty strings and empty JSON arrays are per-frame poll noise.
+static bool IsResultSignificant(const std::string& result) {
+    return !result.empty() && result != "[]";
+}
+
 std::string MPFController::DispatchToMPF(const char* category,
                                          const std::string& subcommand,
                                          const std::map<std::string, std::string>& extraParams)
@@ -115,9 +121,12 @@ std::string MPFController::DispatchToMPF(const char* category,
     std::map<std::string, std::string> params = extraParams;
     params["subcommand"] = subcommand;
 
-    if (m_recorder.IsEnabled()) {
-        m_recorder.Record({m_recorder.Now(), category, "vpx_to_mpf",
-                           subcommand, ParamsToJson(extraParams), ""});
+    double tsBefore = 0;
+    bool shouldRecord = m_recorder.IsEnabled()
+        && subcommand != "get_coilactive"
+        && subcommand != "switch";
+    if (shouldRecord) {
+        tsBefore = m_recorder.Now();
     }
 
     BCPResponse resp = m_bcp.SendAndWait("vpcom_bridge", params, "vpcom_bridge_response");
@@ -128,9 +137,16 @@ std::string MPFController::DispatchToMPF(const char* category,
         if (it != resp.params.end()) resultVal = it->second;
     }
 
-    if (m_recorder.IsEnabled()) {
-        m_recorder.Record({m_recorder.Now(), category, "mpf_to_vpx",
-                           subcommand, "", resultVal.empty() ? "" : resultVal});
+    if (shouldRecord) {
+        // For "input" events (set_switch, pulsesw) always record.
+        // For polls (changed_*, switch reads) only record when result has data.
+        bool isInput = (category[0] == 'i'); // "input"
+        if (isInput || IsResultSignificant(resultVal)) {
+            m_recorder.Record({tsBefore, category, "vpx_to_mpf",
+                               subcommand, ParamsToJson(extraParams), ""});
+            m_recorder.Record({m_recorder.Now(), category, "mpf_to_vpx",
+                               subcommand, "", resultVal.empty() ? "" : resultVal});
+        }
     }
 
     auto errIt = resp.params.find("error");
