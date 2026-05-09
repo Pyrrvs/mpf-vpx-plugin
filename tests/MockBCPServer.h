@@ -33,14 +33,31 @@ public:
     ~MockBCPServer() { Stop(); }
 
     int Start(MockHandler handler) {
+        return Start(handler, 0);
+    }
+
+    int Start(MockHandler handler, int port) {
         m_handler = handler;
         m_listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (m_listenSock == MOCK_INVALID_SOCK) return 0;
 
+        // Allow rebind quickly (avoid TIME_WAIT issues). On Linux, SO_REUSEADDR
+        // alone is not enough to rebind a port that another socket on the same
+        // host just released — SO_REUSEPORT is required too. macOS is more
+        // permissive but accepts the same flag. Windows rebinds eagerly with
+        // just SO_REUSEADDR.
+        int reuse = 1;
+        setsockopt(m_listenSock, SOL_SOCKET, SO_REUSEADDR,
+                   reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#ifndef _WIN32
+        setsockopt(m_listenSock, SOL_SOCKET, SO_REUSEPORT,
+                   reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#endif
+
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        addr.sin_port = 0;
+        addr.sin_port = htons(static_cast<uint16_t>(port));
 
         if (bind(m_listenSock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0) {
             MOCK_CLOSE_SOCKET(m_listenSock); m_listenSock = MOCK_INVALID_SOCK; return 0;
@@ -58,8 +75,21 @@ public:
 
     void Stop() {
         m_running.store(false);
+        // POSIX (Linux/macOS): explicit shutdown(SHUT_RDWR) before close so the
+        // kernel sends FIN immediately and the peer's recv() returns 0
+        // promptly. Without this, Linux tests that detect disconnect via the
+        // BCPClient's connected flag can stall.
+        // Windows: a plain close already issues an RST that the peer notices on
+        // the next send. Calling shutdown first there makes the close graceful,
+        // which lets the peer's next send buffer locally instead of erroring —
+        // hiding the disconnect from the BCPClient.
+        if (m_clientSock != MOCK_INVALID_SOCK) {
+#ifndef _WIN32
+            ::shutdown(m_clientSock, SHUT_RDWR);
+#endif
+            MOCK_CLOSE_SOCKET(m_clientSock); m_clientSock = MOCK_INVALID_SOCK;
+        }
         if (m_listenSock != MOCK_INVALID_SOCK) { MOCK_CLOSE_SOCKET(m_listenSock); m_listenSock = MOCK_INVALID_SOCK; }
-        if (m_clientSock != MOCK_INVALID_SOCK) { MOCK_CLOSE_SOCKET(m_clientSock); m_clientSock = MOCK_INVALID_SOCK; }
         if (m_thread.joinable()) m_thread.join();
     }
 
@@ -82,7 +112,12 @@ private:
                 std::string response = m_handler(line);
                 if (!response.empty()) {
                     response += '\n';
-                    send(m_clientSock, response.c_str(), static_cast<int>(response.size()), 0);
+#ifdef _WIN32
+                    constexpr int sendFlags = 0;
+#else
+                    constexpr int sendFlags = MSG_NOSIGNAL;
+#endif
+                    send(m_clientSock, response.c_str(), static_cast<int>(response.size()), sendFlags);
                 }
             }
         }

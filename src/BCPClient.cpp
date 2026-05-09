@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <cstring>
 #include <chrono>
+#include <thread>
 
 #include "json.hpp"
 
@@ -163,6 +164,17 @@ bool BCPClient::Connect(const std::string& host, int port) {
     return true;
 }
 
+bool BCPClient::ConnectWithRetry(const std::string& host, int port, int intervalMs,
+                                  std::function<int()> portProvider) {
+    while (true) {
+        int actualPort = portProvider ? portProvider() : port;
+        if (actualPort > 0 && Connect(host, actualPort)) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+    }
+}
+
 void BCPClient::Disconnect() {
     if (m_connected) {
         SocketClose();
@@ -255,13 +267,23 @@ void BCPClient::SocketClose() {
 }
 
 bool BCPClient::SocketSendLine(const std::string& line) {
+    if (!m_connected) return false;
     std::string data = line + '\n';
     const char* ptr = data.c_str();
     size_t remaining = data.size();
 
+#ifdef _WIN32
+    int sendFlags = 0;
+#else
+    int sendFlags = MSG_NOSIGNAL;
+#endif
+
     while (remaining > 0) {
-        auto sent = send(static_cast<socket_t>(m_socket), ptr, static_cast<int>(remaining), 0);
-        if (sent <= 0) return false;
+        auto sent = send(static_cast<socket_t>(m_socket), ptr, static_cast<int>(remaining), sendFlags);
+        if (sent <= 0) {
+            m_connected = false;
+            return false;
+        }
         ptr += sent;
         remaining -= static_cast<size_t>(sent);
     }
@@ -302,11 +324,18 @@ bool BCPClient::SocketReadLine(std::string& out) {
         int pollResult = poll(&pfd, 1, remainingMs);
 #endif
 
-        if (pollResult <= 0) return false; // timeout or error
+        if (pollResult == 0) return false; // timeout (not a disconnect)
+        if (pollResult < 0) {
+            m_connected = false;
+            return false;
+        }
 
         char buf[4096];
         auto n = recv(static_cast<socket_t>(m_socket), buf, sizeof(buf), 0);
-        if (n <= 0) return false;
+        if (n <= 0) {
+            m_connected = false;
+            return false;
+        }
 
         m_readBuffer.append(buf, static_cast<size_t>(n));
 

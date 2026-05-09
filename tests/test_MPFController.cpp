@@ -7,8 +7,41 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
+#include <mutex>
+#include <vector>
+#include <algorithm>
+#include <map>
 
 using namespace MPF;
+
+// Handler that records every subcommand it sees, so tests can assert on order.
+struct RecordingHandler {
+    std::vector<std::string> subcommands;
+    std::mutex mu;
+    std::map<std::string, std::string> overrides;  // subcommand -> custom response
+
+    MockHandler MakeHandler() {
+        return [this](const std::string& line) -> std::string {
+            BCPResponse req = BCPClient::DecodeLine(line);
+            if (req.command != "vpcom_bridge") return "";
+            auto it = req.params.find("subcommand");
+            if (it == req.params.end()) return "vpcom_bridge_response?error=missing_subcommand";
+            const std::string& sub = it->second;
+            {
+                std::lock_guard<std::mutex> lk(mu);
+                subcommands.push_back(sub);
+            }
+            auto ov = overrides.find(sub);
+            if (ov != overrides.end()) return ov->second;
+            return "vpcom_bridge_response?result=ok";
+        };
+    }
+
+    std::vector<std::string> Snapshot() {
+        std::lock_guard<std::mutex> lk(mu);
+        return subcommands;
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Helper: mock handler that returns canned responses per subcommand
@@ -504,4 +537,124 @@ TEST_CASE("Recording filter: switch reads never recorded") {
     CHECK(CountLinesContaining(lines, "\"cmd\":\"set_switch\"") == 2);
 
     std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("MPFController: SetSwitch / PulseSW updates switch mirror") {
+    MockBCPServer server;
+    int port = server.Start(MakeMPFHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    ctrl.SetSwitch(3, true);
+    ctrl.SetSwitch("trough_1", true);
+    ctrl.SetSwitch(3, false);
+    ctrl.PulseSW(7);
+
+    const auto& mirror = ctrl.GetSwitchMirror();
+    CHECK(mirror.count("3") == 1);
+    CHECK(mirror.at("3") == false);  // last write wins
+    CHECK(mirror.count("trough_1") == 1);
+    CHECK(mirror.at("trough_1") == true);
+    // PulseSW briefly sets-then-unsets; final state in mirror is false.
+    CHECK(mirror.count("7") == 1);
+    CHECK(mirror.at("7") == false);
+
+    ctrl.Stop();
+    server.Stop();
+}
+
+TEST_CASE("MPFController: Run sends start then reset on connect") {
+    RecordingHandler rec;
+    MockBCPServer server;
+    int port = server.Start(rec.MakeHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    auto seen = rec.Snapshot();
+    REQUIRE(seen.size() >= 2);
+    CHECK(seen[0] == "start");
+    CHECK(seen[1] == "reset");
+
+    ctrl.Stop();
+    server.Stop();
+}
+
+TEST_CASE("MPFController: Run continues when MPF lacks vpx_reset") {
+    RecordingHandler rec;
+    rec.overrides["reset"] = "vpcom_bridge_response?error=Unknown%20command%20reset";
+
+    MockBCPServer server;
+    int port = server.Start(rec.MakeHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    // Should not throw or hang.
+    ctrl.Run("127.0.0.1", port);
+
+    auto seen = rec.Snapshot();
+    REQUIRE(seen.size() >= 2);
+    CHECK(seen[0] == "start");
+    CHECK(seen[1] == "reset");
+    // Lifecycle still completes — Stop() must work.
+    ctrl.Stop();
+
+    server.Stop();
+}
+
+TEST_CASE("MPFController: mid-session disconnect triggers reconnect with reset and replay") {
+    RecordingHandler rec1;
+    MockBCPServer server1;
+    int port = server1.Start(rec1.MakeHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    // Set some switch state during normal operation.
+    ctrl.SetSwitch("3", true);
+    ctrl.SetSwitch("7", false);
+    ctrl.SetSwitch("trough_1", true);
+
+    // Server dies. Plugin should detect and reconnect.
+    server1.Stop();
+
+    // Bring up a fresh server on the same port. Loop briefly because of
+    // possible TIME_WAIT.
+    RecordingHandler rec2;
+    MockBCPServer server2;
+    int port2 = 0;
+    for (int i = 0; i < 20 && port2 == 0; ++i) {
+        port2 = server2.Start(rec2.MakeHandler(), port);
+        if (port2 == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    REQUIRE(port2 == port);
+
+    // Drive a poll-equivalent operation to trigger reconnect detection.
+    // GetChangedSolenoids is a typical poll the VPX timer issues.
+    for (int i = 0; i < 50; ++i) {
+        ctrl.GetChangedSolenoids();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // Once we see a 'reset' on the new server, reconnect happened.
+        auto s = rec2.Snapshot();
+        if (std::find(s.begin(), s.end(), "reset") != s.end()) break;
+    }
+
+    auto seen2 = rec2.Snapshot();
+    auto resetIt = std::find(seen2.begin(), seen2.end(), "reset");
+    REQUIRE_MESSAGE(resetIt != seen2.end(),
+                    "Plugin did not reconnect and send reset");
+
+    // After reset, every mirrored switch should appear as a set_switch call.
+    int setSwitchAfterReset = 0;
+    for (auto it = resetIt + 1; it != seen2.end(); ++it) {
+        if (*it == "set_switch") ++setSwitchAfterReset;
+    }
+    CHECK(setSwitchAfterReset >= 3);  // 3 mirrored switches
+
+    ctrl.Stop();
+    server2.Stop();
 }

@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include <cstdint>
+#include <functional>
 
 namespace MPF {
 
@@ -20,6 +21,13 @@ public:
     BCPClient& operator=(const BCPClient&) = delete;
 
     bool Connect(const std::string& host, int port);
+
+    // Retry Connect every intervalMs until it succeeds. Blocks indefinitely.
+    // portProvider, if non-null, is called every attempt to fetch the port —
+    // useful for tests where the port isn't known until the server binds.
+    bool ConnectWithRetry(const std::string& host, int port, int intervalMs,
+                          std::function<int()> portProvider = {});
+
     void Disconnect();
     bool IsConnected() const;
 

@@ -4,6 +4,8 @@
 
 #include <thread>
 #include <chrono>
+#include <atomic>
+#include <functional>
 
 using namespace MPF;
 
@@ -230,4 +232,62 @@ TEST_CASE("DecodeLine: non-json response still works") {
     CHECK(resp.command == "vpcom_bridge_response");
     CHECK(resp.params["result"] == "True");
     CHECK(resp.params["subcommand"] == "switch");
+}
+
+TEST_CASE("BCPClient: ConnectWithRetry succeeds after server starts late") {
+    using namespace MPF;
+
+    // Pick a port and start nothing on it yet.
+    // We start the server in a separate thread after a delay; the client
+    // should retry until it succeeds.
+    std::atomic<int> serverPort{0};
+    std::atomic<bool> serverStarted{false};
+    MockBCPServer server;
+
+    std::thread starter([&]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        serverPort.store(server.Start([](const std::string&){ return ""; }));
+        serverStarted.store(true);
+    });
+
+    BCPClient client;
+    // Quick poll interval so the test runs fast.
+    bool ok = client.ConnectWithRetry("127.0.0.1", -1, /*intervalMs=*/50,
+                                       /*portProvider=*/[&]() { return serverPort.load(); });
+
+    starter.join();
+
+    CHECK(ok);
+    CHECK(client.IsConnected());
+    CHECK(serverStarted.load());
+
+    client.Disconnect();
+    server.Stop();
+}
+
+TEST_CASE("BCPClient: IsConnected goes false when peer closes the socket") {
+    using namespace MPF;
+
+    MockBCPServer server;
+    int port = server.Start([](const std::string&){ return "vpcom_bridge_response?result=ok\n"; });
+    REQUIRE(port > 0);
+
+    BCPClient client;
+    REQUIRE(client.Connect("127.0.0.1", port));
+    REQUIRE(client.IsConnected());
+
+    // Server goes away.
+    server.Stop();
+
+    // Probe disconnect via SendAndWait. Send-only is unreliable across
+    // platforms — Linux/Windows kernels buffer the local send and only later
+    // notice the peer is dead. SendAndWait forces a recv() that sees EOF
+    // directly, which is also what the production poll loop does
+    // (DispatchToMPF → SendAndWait → recv → 0 → m_connected = false).
+    client.SetTimeout(500);
+    BCPResponse resp = client.SendAndWait("vpcom_bridge",
+                                          {{"subcommand", "noop"}},
+                                          "vpcom_bridge_response");
+    CHECK(resp.command.empty());      // recv saw EOF, no response
+    CHECK_FALSE(client.IsConnected());
 }
