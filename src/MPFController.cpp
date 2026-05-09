@@ -170,6 +170,7 @@ bool MPFController::GetSwitch(const std::string& number) {
 }
 
 void MPFController::SetSwitch(int number, bool value) {
+    m_switchMirror[std::to_string(number)] = value;
     DispatchToMPF("input", "set_switch", {
         {"number", std::to_string(number)},
         {"value", value ? "bool:True" : "bool:False"}
@@ -177,6 +178,7 @@ void MPFController::SetSwitch(int number, bool value) {
 }
 
 void MPFController::SetSwitch(const std::string& number, bool value) {
+    m_switchMirror[number] = value;
     DispatchToMPF("input", "set_switch", {
         {"number", number},
         {"value", value ? "bool:True" : "bool:False"}
@@ -184,10 +186,12 @@ void MPFController::SetSwitch(const std::string& number, bool value) {
 }
 
 void MPFController::PulseSW(int number) {
+    m_switchMirror[std::to_string(number)] = false;
     DispatchToMPF("input", "pulsesw", {{"number", std::to_string(number)}});
 }
 
 void MPFController::PulseSW(const std::string& number) {
+    m_switchMirror[number] = false;
     DispatchToMPF("input", "pulsesw", {{"number", number}});
 }
 

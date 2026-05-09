@@ -71,6 +71,9 @@ public:
     std::string GetSplashInfoLine() const { return m_splashInfoLine; }
     void SetSplashInfoLine(const std::string& v) { m_splashInfoLine = v; }
 
+    // Test-only: read-only access to the switch mirror that's replayed on reconnect.
+    const std::map<std::string, bool>& GetSwitchMirror() const { return m_switchMirror; }
+
 private:
     // Dispatch a BCP command and return the "result" param from the response.
     std::string DispatchToMPF(const char* category,
@@ -80,6 +83,7 @@ private:
 
     BCPClient m_bcp;
     Recorder m_recorder;
+    std::map<std::string, bool> m_switchMirror;
 
     std::string m_gameName = "Game";
     bool m_showTitle = false;

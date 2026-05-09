@@ -505,3 +505,29 @@ TEST_CASE("Recording filter: switch reads never recorded") {
 
     std::filesystem::remove_all(tmpDir);
 }
+
+TEST_CASE("MPFController: SetSwitch / PulseSW updates switch mirror") {
+    MockBCPServer server;
+    int port = server.Start(MakeMPFHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    ctrl.SetSwitch(3, true);
+    ctrl.SetSwitch("trough_1", true);
+    ctrl.SetSwitch(3, false);
+    ctrl.PulseSW(7);
+
+    const auto& mirror = ctrl.GetSwitchMirror();
+    CHECK(mirror.count("3") == 1);
+    CHECK(mirror.at("3") == false);  // last write wins
+    CHECK(mirror.count("trough_1") == 1);
+    CHECK(mirror.at("trough_1") == true);
+    // PulseSW briefly sets-then-unsets; final state in mirror is false.
+    CHECK(mirror.count("7") == 1);
+    CHECK(mirror.at("7") == false);
+
+    ctrl.Stop();
+    server.Stop();
+}
