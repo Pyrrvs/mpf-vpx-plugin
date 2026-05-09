@@ -279,12 +279,15 @@ TEST_CASE("BCPClient: IsConnected goes false when peer closes the socket") {
     // Server goes away.
     server.Stop();
 
-    // Trigger a send; it should fail and update m_connected.
-    client.Send("vpcom_bridge", {{"subcommand", "noop"}});
-
-    // Give the client a moment to notice (some platforms lag).
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    client.Send("vpcom_bridge", {{"subcommand", "noop2"}});
-
+    // Probe disconnect via SendAndWait. Send-only is unreliable across
+    // platforms — Linux/Windows kernels buffer the local send and only later
+    // notice the peer is dead. SendAndWait forces a recv() that sees EOF
+    // directly, which is also what the production poll loop does
+    // (DispatchToMPF → SendAndWait → recv → 0 → m_connected = false).
+    client.SetTimeout(500);
+    BCPResponse resp = client.SendAndWait("vpcom_bridge",
+                                          {{"subcommand", "noop"}},
+                                          "vpcom_bridge_response");
+    CHECK(resp.command.empty());      // recv saw EOF, no response
     CHECK_FALSE(client.IsConnected());
 }
