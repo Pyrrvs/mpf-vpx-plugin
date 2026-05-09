@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <cstring>
 #include <chrono>
+#include <thread>
 
 #include "json.hpp"
 
@@ -161,6 +162,17 @@ bool BCPClient::Connect(const std::string& host, int port) {
     m_connected = true;
     MPF_LOGI("BCPClient::Connect - connected");
     return true;
+}
+
+bool BCPClient::ConnectWithRetry(const std::string& host, int port, int intervalMs,
+                                  std::function<int()> portProvider) {
+    while (true) {
+        int actualPort = portProvider ? portProvider() : port;
+        if (actualPort > 0 && Connect(host, actualPort)) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+    }
 }
 
 void BCPClient::Disconnect() {
