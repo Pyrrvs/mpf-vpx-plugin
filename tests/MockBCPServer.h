@@ -41,10 +41,18 @@ public:
         m_listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (m_listenSock == MOCK_INVALID_SOCK) return 0;
 
-        // Allow rebind quickly (avoid TIME_WAIT issues).
+        // Allow rebind quickly (avoid TIME_WAIT issues). On Linux, SO_REUSEADDR
+        // alone is not enough to rebind a port that another socket on the same
+        // host just released — SO_REUSEPORT is required too. macOS is more
+        // permissive but accepts the same flag. Windows rebinds eagerly with
+        // just SO_REUSEADDR.
         int reuse = 1;
         setsockopt(m_listenSock, SOL_SOCKET, SO_REUSEADDR,
                    reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#ifndef _WIN32
+        setsockopt(m_listenSock, SOL_SOCKET, SO_REUSEPORT,
+                   reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#endif
 
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
@@ -67,8 +75,18 @@ public:
 
     void Stop() {
         m_running.store(false);
+        // Shutdown before close so the kernel sends FIN immediately and the
+        // peer's recv() returns 0 promptly. Without this, tests that detect
+        // disconnect via the BCPClient's connected flag can stall.
+        if (m_clientSock != MOCK_INVALID_SOCK) {
+#ifdef _WIN32
+            ::shutdown(m_clientSock, SD_BOTH);
+#else
+            ::shutdown(m_clientSock, SHUT_RDWR);
+#endif
+            MOCK_CLOSE_SOCKET(m_clientSock); m_clientSock = MOCK_INVALID_SOCK;
+        }
         if (m_listenSock != MOCK_INVALID_SOCK) { MOCK_CLOSE_SOCKET(m_listenSock); m_listenSock = MOCK_INVALID_SOCK; }
-        if (m_clientSock != MOCK_INVALID_SOCK) { MOCK_CLOSE_SOCKET(m_clientSock); m_clientSock = MOCK_INVALID_SOCK; }
         if (m_thread.joinable()) m_thread.join();
     }
 
