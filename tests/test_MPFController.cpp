@@ -582,3 +582,25 @@ TEST_CASE("MPFController: Run sends start then reset on connect") {
     ctrl.Stop();
     server.Stop();
 }
+
+TEST_CASE("MPFController: Run continues when MPF lacks vpx_reset") {
+    RecordingHandler rec;
+    rec.overrides["reset"] = "vpcom_bridge_response?error=Unknown%20command%20reset";
+
+    MockBCPServer server;
+    int port = server.Start(rec.MakeHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    // Should not throw or hang.
+    ctrl.Run("127.0.0.1", port);
+
+    auto seen = rec.Snapshot();
+    REQUIRE(seen.size() >= 2);
+    CHECK(seen[0] == "start");
+    CHECK(seen[1] == "reset");
+    // Lifecycle still completes — Stop() must work.
+    ctrl.Stop();
+
+    server.Stop();
+}
