@@ -75,13 +75,16 @@ public:
 
     void Stop() {
         m_running.store(false);
-        // Shutdown before close so the kernel sends FIN immediately and the
-        // peer's recv() returns 0 promptly. Without this, tests that detect
-        // disconnect via the BCPClient's connected flag can stall.
+        // POSIX (Linux/macOS): explicit shutdown(SHUT_RDWR) before close so the
+        // kernel sends FIN immediately and the peer's recv() returns 0
+        // promptly. Without this, Linux tests that detect disconnect via the
+        // BCPClient's connected flag can stall.
+        // Windows: a plain close already issues an RST that the peer notices on
+        // the next send. Calling shutdown first there makes the close graceful,
+        // which lets the peer's next send buffer locally instead of erroring —
+        // hiding the disconnect from the BCPClient.
         if (m_clientSock != MOCK_INVALID_SOCK) {
-#ifdef _WIN32
-            ::shutdown(m_clientSock, SD_BOTH);
-#else
+#ifndef _WIN32
             ::shutdown(m_clientSock, SHUT_RDWR);
 #endif
             MOCK_CLOSE_SOCKET(m_clientSock); m_clientSock = MOCK_INVALID_SOCK;
@@ -109,7 +112,12 @@ private:
                 std::string response = m_handler(line);
                 if (!response.empty()) {
                     response += '\n';
-                    send(m_clientSock, response.c_str(), static_cast<int>(response.size()), 0);
+#ifdef _WIN32
+                    constexpr int sendFlags = 0;
+#else
+                    constexpr int sendFlags = MSG_NOSIGNAL;
+#endif
+                    send(m_clientSock, response.c_str(), static_cast<int>(response.size()), sendFlags);
                 }
             }
         }
