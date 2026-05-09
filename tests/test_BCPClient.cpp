@@ -264,3 +264,27 @@ TEST_CASE("BCPClient: ConnectWithRetry succeeds after server starts late") {
     client.Disconnect();
     server.Stop();
 }
+
+TEST_CASE("BCPClient: IsConnected goes false when peer closes the socket") {
+    using namespace MPF;
+
+    MockBCPServer server;
+    int port = server.Start([](const std::string&){ return "vpcom_bridge_response?result=ok\n"; });
+    REQUIRE(port > 0);
+
+    BCPClient client;
+    REQUIRE(client.Connect("127.0.0.1", port));
+    REQUIRE(client.IsConnected());
+
+    // Server goes away.
+    server.Stop();
+
+    // Trigger a send; it should fail and update m_connected.
+    client.Send("vpcom_bridge", {{"subcommand", "noop"}});
+
+    // Give the client a moment to notice (some platforms lag).
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    client.Send("vpcom_bridge", {{"subcommand", "noop2"}});
+
+    CHECK_FALSE(client.IsConnected());
+}
