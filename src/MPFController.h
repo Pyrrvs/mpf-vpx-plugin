@@ -83,7 +83,11 @@ private:
 
     void SendResetHandshake();
     void ReplaySwitchMirror();
+    void EnsureConnected();
     bool m_resetUnsupportedWarned = false;
+    std::string m_addr;
+    int m_port = 0;
+    bool m_runOnce = false;
 
     BCPClient m_bcp;
     Recorder m_recorder;

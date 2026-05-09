@@ -604,3 +604,57 @@ TEST_CASE("MPFController: Run continues when MPF lacks vpx_reset") {
 
     server.Stop();
 }
+
+TEST_CASE("MPFController: mid-session disconnect triggers reconnect with reset and replay") {
+    RecordingHandler rec1;
+    MockBCPServer server1;
+    int port = server1.Start(rec1.MakeHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    // Set some switch state during normal operation.
+    ctrl.SetSwitch("3", true);
+    ctrl.SetSwitch("7", false);
+    ctrl.SetSwitch("trough_1", true);
+
+    // Server dies. Plugin should detect and reconnect.
+    server1.Stop();
+
+    // Bring up a fresh server on the same port. Loop briefly because of
+    // possible TIME_WAIT.
+    RecordingHandler rec2;
+    MockBCPServer server2;
+    int port2 = 0;
+    for (int i = 0; i < 20 && port2 == 0; ++i) {
+        port2 = server2.Start(rec2.MakeHandler(), port);
+        if (port2 == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    REQUIRE(port2 == port);
+
+    // Drive a poll-equivalent operation to trigger reconnect detection.
+    // GetChangedSolenoids is a typical poll the VPX timer issues.
+    for (int i = 0; i < 50; ++i) {
+        ctrl.GetChangedSolenoids();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // Once we see a 'reset' on the new server, reconnect happened.
+        auto s = rec2.Snapshot();
+        if (std::find(s.begin(), s.end(), "reset") != s.end()) break;
+    }
+
+    auto seen2 = rec2.Snapshot();
+    auto resetIt = std::find(seen2.begin(), seen2.end(), "reset");
+    REQUIRE_MESSAGE(resetIt != seen2.end(),
+                    "Plugin did not reconnect and send reset");
+
+    // After reset, every mirrored switch should appear as a set_switch call.
+    int setSwitchAfterReset = 0;
+    for (auto it = resetIt + 1; it != seen2.end(); ++it) {
+        if (*it == "set_switch") ++setSwitchAfterReset;
+    }
+    CHECK(setSwitchAfterReset >= 3);  // 3 mirrored switches
+
+    ctrl.Stop();
+    server2.Stop();
+}

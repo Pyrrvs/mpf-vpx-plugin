@@ -33,14 +33,23 @@ public:
     ~MockBCPServer() { Stop(); }
 
     int Start(MockHandler handler) {
+        return Start(handler, 0);
+    }
+
+    int Start(MockHandler handler, int port) {
         m_handler = handler;
         m_listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (m_listenSock == MOCK_INVALID_SOCK) return 0;
 
+        // Allow rebind quickly (avoid TIME_WAIT issues).
+        int reuse = 1;
+        setsockopt(m_listenSock, SOL_SOCKET, SO_REUSEADDR,
+                   reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+
         struct sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        addr.sin_port = 0;
+        addr.sin_port = htons(static_cast<uint16_t>(port));
 
         if (bind(m_listenSock, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) != 0) {
             MOCK_CLOSE_SOCKET(m_listenSock); m_listenSock = MOCK_INVALID_SOCK; return 0;

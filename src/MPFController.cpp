@@ -84,6 +84,8 @@ void MPFController::Run(const std::string& addr) {
 
 void MPFController::Run(const std::string& addr, int port) {
     MPF_LOGI("MPFController::Run(%s, %d)", addr.c_str(), port);
+    m_addr = addr;
+    m_port = port;
     m_bcp.ConnectWithRetry(addr, port, /*intervalMs=*/2000);
     MPF_LOGD("MPFController::Run - connected, sending start handshake");
     BCPResponse startResp = m_bcp.SendAndWait(
@@ -97,6 +99,7 @@ void MPFController::Run(const std::string& addr, int port) {
     SendResetHandshake();
     ReplaySwitchMirror();
     m_recorder.StartSession();
+    m_runOnce = true;
 }
 
 void MPFController::Stop() {
@@ -140,6 +143,17 @@ void MPFController::ReplaySwitchMirror() {
     }
 }
 
+void MPFController::EnsureConnected() {
+    if (m_bcp.IsConnected()) return;
+    if (!m_runOnce) return;  // First connect is owned by Run(); don't re-enter from here.
+    MPF_LOGW("MPFController: lost connection to MPF, reconnecting...");
+    m_bcp.ConnectWithRetry(m_addr, m_port, /*intervalMs=*/2000);
+    m_bcp.SendAndWait("vpcom_bridge", {{"subcommand", "start"}}, "vpcom_bridge_response");
+    SendResetHandshake();
+    ReplaySwitchMirror();
+    MPF_LOGI("MPFController: reconnected");
+}
+
 // ---------------------------------------------------------------------------
 // DispatchToMPF
 // ---------------------------------------------------------------------------
@@ -154,6 +168,7 @@ std::string MPFController::DispatchToMPF(const char* category,
                                          const std::string& subcommand,
                                          const std::map<std::string, std::string>& extraParams)
 {
+    EnsureConnected();
     std::map<std::string, std::string> params = extraParams;
     params["subcommand"] = subcommand;
 
