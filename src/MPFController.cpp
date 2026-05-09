@@ -84,17 +84,18 @@ void MPFController::Run(const std::string& addr) {
 
 void MPFController::Run(const std::string& addr, int port) {
     MPF_LOGI("MPFController::Run(%s, %d)", addr.c_str(), port);
-    if (!m_bcp.Connect(addr, port)) {
-        MPF_LOGE("MPFController::Run - BCP connect failed, aborting");
-        return;
-    }
+    m_bcp.ConnectWithRetry(addr, port, /*intervalMs=*/2000);
     MPF_LOGD("MPFController::Run - connected, sending start handshake");
-    BCPResponse resp = m_bcp.SendAndWait("vpcom_bridge", {{"subcommand", "start"}}, "vpcom_bridge_response");
-    if (resp.command.empty()) {
-        MPF_LOGE("MPFController::Run - handshake failed (empty response)");
+    BCPResponse startResp = m_bcp.SendAndWait(
+        "vpcom_bridge", {{"subcommand", "start"}}, "vpcom_bridge_response");
+    if (startResp.command.empty()) {
+        MPF_LOGE("MPFController::Run - start handshake failed (empty response)");
     } else {
-        MPF_LOGI("MPFController::Run - handshake OK");
+        MPF_LOGI("MPFController::Run - start OK");
     }
+
+    SendResetHandshake();
+    ReplaySwitchMirror();
     m_recorder.StartSession();
 }
 
@@ -102,6 +103,41 @@ void MPFController::Stop() {
     m_recorder.StopSession();
     m_bcp.Send("vpcom_bridge", {{"subcommand", "stop"}});
     m_bcp.Disconnect();
+}
+
+void MPFController::SendResetHandshake() {
+    BCPResponse resp = m_bcp.SendAndWait(
+        "vpcom_bridge", {{"subcommand", "reset"}}, "vpcom_bridge_response");
+    auto errIt = resp.params.find("error");
+    if (errIt == resp.params.end()) {
+        MPF_LOGI("MPFController::SendResetHandshake - reset OK");
+        return;
+    }
+    const std::string& err = errIt->second;
+    if (err.find("Unknown command") != std::string::npos &&
+        err.find("reset") != std::string::npos) {
+        if (!m_resetUnsupportedWarned) {
+            MPF_LOGW("MPFController: this MPF lacks vpx_reset; state will not be "
+                     "cleaned between sessions. Upgrade MPF to a build with "
+                     "vpcom_bridge?subcommand=reset.");
+            m_resetUnsupportedWarned = true;
+        }
+        return;
+    }
+    MPF_LOGW("MPFController: vpx_reset returned error: %s; continuing", err.c_str());
+}
+
+void MPFController::ReplaySwitchMirror() {
+    if (m_switchMirror.empty()) return;
+    MPF_LOGI("MPFController::ReplaySwitchMirror - replaying %zu switches",
+             m_switchMirror.size());
+    for (const auto& [num, value] : m_switchMirror) {
+        m_bcp.Send("vpcom_bridge", {
+            {"subcommand", "set_switch"},
+            {"number", num},
+            {"value", value ? "bool:True" : "bool:False"}
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -7,8 +7,41 @@
 #include <chrono>
 #include <filesystem>
 #include <string>
+#include <mutex>
+#include <vector>
+#include <algorithm>
+#include <map>
 
 using namespace MPF;
+
+// Handler that records every subcommand it sees, so tests can assert on order.
+struct RecordingHandler {
+    std::vector<std::string> subcommands;
+    std::mutex mu;
+    std::map<std::string, std::string> overrides;  // subcommand -> custom response
+
+    MockHandler MakeHandler() {
+        return [this](const std::string& line) -> std::string {
+            BCPResponse req = BCPClient::DecodeLine(line);
+            if (req.command != "vpcom_bridge") return "";
+            auto it = req.params.find("subcommand");
+            if (it == req.params.end()) return "vpcom_bridge_response?error=missing_subcommand";
+            const std::string& sub = it->second;
+            {
+                std::lock_guard<std::mutex> lk(mu);
+                subcommands.push_back(sub);
+            }
+            auto ov = overrides.find(sub);
+            if (ov != overrides.end()) return ov->second;
+            return "vpcom_bridge_response?result=ok";
+        };
+    }
+
+    std::vector<std::string> Snapshot() {
+        std::lock_guard<std::mutex> lk(mu);
+        return subcommands;
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Helper: mock handler that returns canned responses per subcommand
@@ -527,6 +560,24 @@ TEST_CASE("MPFController: SetSwitch / PulseSW updates switch mirror") {
     // PulseSW briefly sets-then-unsets; final state in mirror is false.
     CHECK(mirror.count("7") == 1);
     CHECK(mirror.at("7") == false);
+
+    ctrl.Stop();
+    server.Stop();
+}
+
+TEST_CASE("MPFController: Run sends start then reset on connect") {
+    RecordingHandler rec;
+    MockBCPServer server;
+    int port = server.Start(rec.MakeHandler());
+    REQUIRE(port > 0);
+
+    MPFController ctrl(false, "");
+    ctrl.Run("127.0.0.1", port);
+
+    auto seen = rec.Snapshot();
+    REQUIRE(seen.size() >= 2);
+    CHECK(seen[0] == "start");
+    CHECK(seen[1] == "reset");
 
     ctrl.Stop();
     server.Stop();

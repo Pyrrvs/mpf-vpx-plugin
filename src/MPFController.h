@@ -81,6 +81,10 @@ private:
                               const std::map<std::string, std::string>& extraParams = {});
     static std::string ParamsToJson(const std::map<std::string, std::string>& params);
 
+    void SendResetHandshake();
+    void ReplaySwitchMirror();
+    bool m_resetUnsupportedWarned = false;
+
     BCPClient m_bcp;
     Recorder m_recorder;
     std::map<std::string, bool> m_switchMirror;
