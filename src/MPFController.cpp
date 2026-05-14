@@ -135,11 +135,11 @@ void MPFController::ReplaySwitchMirror() {
     MPF_LOGI("MPFController::ReplaySwitchMirror - replaying %zu switches",
              m_switchMirror.size());
     for (const auto& [num, value] : m_switchMirror) {
-        m_bcp.Send("vpcom_bridge", {
+        m_bcp.SendAndWait("vpcom_bridge", {
             {"subcommand", "set_switch"},
             {"number", num},
             {"value", value ? "bool:True" : "bool:False"}
-        });
+        }, "vpcom_bridge_response");
     }
 }
 
